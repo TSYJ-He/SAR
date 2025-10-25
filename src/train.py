@@ -11,21 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from llamafactory.train.tuner import run_exp
-
-
 def main():
     run_exp()
-    
     if finetuning_args.custom_trainer == "control_sft":
     from llamafactory.train.sft.control_trainer import ControlSFTTrainer
     from llamafactory.train.sft import workflow
     workflow.CustomSFTTrainer = ControlSFTTrainer # Monkey-patch the trainer class
     logger.info("Using ControlSFTTrainer for visual supervision experiment.")
-
 run_train() # The original function call in train.py that starts the process
-
 
 def _mp_fn(index):
     # For xla_spawn (TPUs)
