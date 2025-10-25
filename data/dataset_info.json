@@ -1,0 +1,9 @@
+"refcoco_val_sar": {
+  "file_name": "refcoco_val_sar.json",
+  "columns": {
+    "image": "image",
+    "query": "query",
+    "object_prompt": "object_prompt",
+    "bbox": "bbox"
+  }
+}

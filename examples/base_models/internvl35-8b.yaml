@@ -1,0 +1,4 @@
+
+model_name_or_path: OpenGVLab/InternVL35-8B-hf
+trust_remote_code: true
+compute_dtype: bfloat16

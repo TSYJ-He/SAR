@@ -1,0 +1,4 @@
+
+model_name_or_path: Qwen/Qwen2.5-8B-VL-Chat
+trust_remote_code: true
+compute_dtype: bfloat16
