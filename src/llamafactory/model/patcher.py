@@ -47,6 +47,10 @@ if TYPE_CHECKING:
     from ..hparams import ModelArguments
 
 
+# import threading
+# _re = threading.local()
+# _re.active = False
+
 logger = logging.get_logger(__name__)
 
 
@@ -163,26 +167,50 @@ def patch_model_for_sar(model: "PreTrainedModel", finetuning_args: "FinetuningAr
         return
     logger.info_rank0("Applying SAR patch to the model.")
     # Identify the decoder layers of the model. This is model-specific.
-    if hasattr(model, "model") and hasattr(model.model, "layers"):  # LLaMA, Qwen, etc.
-        decoder_layers = model.model.layers
+    if hasattr(model, "model"):  
+        if hasattr(model.model, "layers"): # LLaMA, Qwen, etc.
+            decoder_layers = model.model.layers
+        elif hasattr(model.model, "language_model") and hasattr(model.model.language_model, "layers"): # LLaVA-OneVision
+            decoder_layers = model.model.language_model.layers
     elif hasattr(model, "layers"):  # Some models have layers directly
         decoder_layers = model.layers
+    elif hasattr(model, "language_model") and hasattr(model.language_model, "layers"):  # LLaVA-OneVision
+        decoder_layers = model.language_model.layers
     else:
-        logger.warning_rank0("Could not find decoder layers to patch for SAR. Skipping.")
-        return
+        raise ValueError("Could not find decoder layers to patch for SAR.")
+        # logger.warning_rank0("Could not find decoder layers to patch for SAR. Skipping.")
+        # return
+    
     # To get the semantic prior, we need access to the vision encoder's intermediate features.
     # We will patch the vision encoder to store its last hidden state.
-    if not hasattr(model, "vision_tower") or not hasattr(model.vision_tower, "vision_tower"):
-        logger.warning_rank0("Could not find vision tower for SAR semantic prior. Skipping.")
-        return
-    vision_encoder = model.vision_tower.vision_tower
+    # DEBUG: @shulin16
+    if hasattr(model, "vision_tower") and hasattr(model.vision_tower, "vision_tower"):
+        vision_encoder = model.vision_tower.vision_tower
+    elif hasattr(model, "model") and hasattr(model.model, "visual"): # LLaVA-OneVision
+        vision_encoder = model.model.visual
+    else:
+        raise ValueError("Could not find vision tower to patch for SAR.")
+        # logger.warning_rank0("Could not find vision tower to patch for SAR. Skipping.")
+        # return
+    # if not hasattr(model, "vision_tower") or not hasattr(model.vision_tower, "vision_tower"):
+    #     logger.warning_rank0("Could not find vision tower for SAR semantic prior. Skipping.")
+    #     return
     original_vision_forward = vision_encoder.forward
 
+    # original dev
     def patched_vision_forward(self, *args, **kwargs):
+        import pdb; pdb.set_trace()
         outputs = original_vision_forward(*args, **kwargs)
         # Store the intermediate features for the semantic prior.
         # Let's use 2/3 depth as a heuristic.
-        intermediate_layer_idx = (len(self.encoder.layers) * 2) // 3
+        if hasattr(self, "encoder") and hasattr(self.encoder, "layers"):
+            intermediate_layer_idx = (len(self.encoder.layers) * 2) // 3
+        elif hasattr(self, "blocks"):
+            intermediate_layer_idx = (len(self.blocks) * 2) // 3
+        else:
+            raise ValueError("Could not find encoder or blocks to patch for SAR.")
+            # logger.warning_rank0("Could not find encoder or blocks to patch for SAR. Skipping.")
+            # return
         if kwargs.get("output_hidden_states", False):
             model._sar_vision_hidden_states = outputs.hidden_states[intermediate_layer_idx]
         else:
@@ -192,6 +220,147 @@ def patch_model_for_sar(model: "PreTrainedModel", finetuning_args: "FinetuningAr
             model._sar_vision_hidden_states = outputs.hidden_states[intermediate_layer_idx]
         return outputs
     vision_encoder.forward = MethodType(patched_vision_forward, vision_encoder)
+    
+    # DEBUG: @shulin16
+    # def patched_vision_forward(self, *args, **kwargs):
+        
+    #     kwargs.setdefault("output_hidden_states", True)
+    #     kwargs.setdefault("return_dict", True)
+        
+    #     out = self.forward(*args, **kwargs)
+    #     hs = getattr(out, "hidden_states", None)
+        
+    #     import pdb; pdb.set_trace()
+    #     if hs is None and not getattr(_re, "active", False):
+    #         _re.active = True
+    #         collected = []
+    #         handles = []
+            
+    #         def _hook(_m, _inp, o):
+    #             collected.append(o)
+            
+    #         try:
+    #             if hasattr(self, "encoder") and hasattr(self.encoder, "layers"):
+    #                 blocks = list(self.encoder.layers)
+    #             elif hasattr(self, "blocks"):
+    #                 blocks = list(self.blocks)
+    #             else:
+    #                 blocks = []
+
+    #             for b in blocks:
+    #                 handles.append(b.register_forward_hook(_hook))
+            
+    #             # re-run once (flag set)
+    #             out = self.forward(*args, **kwargs)
+    #         finally:
+    #             for h in handles:
+    #                 h.remove()
+            
+    #         if collected:
+    #             hs = tuple(collected)
+        
+    #     import pdb; pdb.set_trace()
+    #     # select features
+    #     if hs is not None and len(hs) > 0:
+    #         if hasattr(self, "encoder") and hasattr(self.encoder, "layers"):
+    #             idx = (len(self.encoder.layers) * 2) // 3
+    #         elif hasattr(self, "blocks"):
+    #             idx = (len(self.blocks) * 2) // 3
+    #         else:
+    #             idx = (len(hs) * 2) // 3
+    #         idx = max(0, min(idx, len(hs) - 1))
+    #         feat = hs[idx]
+    #         if isinstance(feat, (tuple, list)):
+    #             feat = feat[0]
+    #         model._sar_vision_hidden_states = feat
+    #         return out
+        
+    #     # add fallback
+    #     if isinstance(out, torch.Tensor):
+    #         model._sar_vision_hidden_states = out
+    #     elif isinstance(out, tuple) and len(out) and isinstance(out[0], torch.Tensor):
+    #         model._sar_vision_hidden_states = out[0]
+    #     else:
+    #         model._sar_vision_hidden_states = None
+            
+    # vision_encoder.forward = MethodType(patched_vision_forward, vision_encoder)
+
+    # Factory function to create SAR forward with proper closure
+    def make_sar_forward(sar_inst, orig_forward):
+        def sar_forward(self, hidden_states, *args, **kwargs):
+            # DEBUG: Log what we receive
+            import os
+            debug_enabled = os.environ.get("SAR_DEBUG", "0") == "1"
+
+            if debug_enabled and sar_inst.is_active:
+                logger.info_rank0(f"[SAR Layer {sar_inst.layer_idx}] Forward called")
+                logger.info_rank0(f"  - is_active: {sar_inst.is_active}")
+                logger.info_rank0(f"  - training: {self.training}")
+                logger.info_rank0(f"  - hidden_states shape: {hidden_states.shape if hidden_states is not None else None}")
+                logger.info_rank0(f"  - kwargs keys: {list(kwargs.keys())}")
+
+            # We need to pass `output_attentions=True` to get the scores
+            original_output_attentions = kwargs.get("output_attentions", False)
+            kwargs["output_attentions"] = True
+
+            # The original forward call
+            outputs = orig_forward(hidden_states, *args, **kwargs)
+
+            # Handle different return formats
+            if isinstance(outputs, tuple):
+                attn_output = outputs[0]
+                attn_weights = outputs[1] if len(outputs) > 1 else None
+                past_key_value = outputs[2] if len(outputs) > 2 else None
+            else:
+                attn_output = outputs
+                attn_weights = None
+                past_key_value = None
+
+            if sar_inst.is_active and self.training is False:
+                if debug_enabled:
+                    logger.info_rank0(f"[SAR Layer {sar_inst.layer_idx}] Attempting SAR computation...")
+                    logger.info_rank0(f"  - attn_weights: {attn_weights.shape if attn_weights is not None else None}")
+                    logger.info_rank0(f"  - vision hidden states: {getattr(model, '_sar_vision_hidden_states', None) is not None}")
+
+                # Get input_ids from model's global state (we'll need to set this during generation)
+                input_ids = getattr(model, "_current_input_ids", None)
+
+                if debug_enabled:
+                    logger.info_rank0(f"  - input_ids: {input_ids.shape if input_ids is not None else None}")
+
+                if attn_weights is not None and input_ids is not None:
+                    head_weights = sar_inst.run(
+                        pre_softmax_scores=attn_weights,
+                        attention_probs=attn_weights,
+                        input_ids=input_ids,
+                        vision_encoder_hidden_states=getattr(model, "_sar_vision_hidden_states", None),
+                    )
+
+                    if head_weights is not None:
+                        if debug_enabled:
+                            logger.info_rank0(f"[SAR Layer {sar_inst.layer_idx}] Applying reweighting!")
+                            logger.info_rank0(f"  - head_weights shape: {head_weights.shape}")
+
+                        # Reshape attn_output to be per-head before projection
+                        bsz, q_len, hidden_size = attn_output.size()
+                        head_dim = hidden_size // self.num_heads
+
+                        # Shape (bsz, q_len, hidden_size) -> (bsz, q_len, num_heads, head_dim) -> (bsz, num_heads, q_len, head_dim)
+                        attn_output_heads = attn_output.view(bsz, q_len, self.num_heads, head_dim).transpose(1, 2)
+                        reweighted_heads = sar_inst.apply_reweighting(attn_output_heads, head_weights)
+                        attn_output = reweighted_heads.transpose(1, 2).reshape(bsz, q_len, hidden_size)
+                    elif debug_enabled:
+                        logger.info_rank0(f"[SAR Layer {sar_inst.layer_idx}] head_weights is None - SAR not applied")
+                elif debug_enabled:
+                    logger.info_rank0(f"[SAR Layer {sar_inst.layer_idx}] Missing attn_weights or input_ids - SAR not applied")
+
+            # Restore original `output_attentions` behavior for the final return value
+            if not original_output_attentions:
+                return (attn_output, None, past_key_value) if past_key_value is not None else (attn_output,)
+            else:
+                return (attn_output, attn_weights, past_key_value) if past_key_value is not None else (attn_output, attn_weights)
+
+        return sar_forward
 
     for layer_idx, layer in enumerate(decoder_layers):
         # Access the attention module, which can be nested differently
@@ -200,55 +369,15 @@ def patch_model_for_sar(model: "PreTrainedModel", finetuning_args: "FinetuningAr
         else:
             logger.warning_rank0(f"Layer {layer_idx} has no 'self_attn' module. Skipping SAR patch.")
             continue
+
         original_attention_forward = attention_module.forward
         sar_instance = SARCore(model, finetuning_args, layer_idx)
 
-        def sar_forward(self, *args, **kwargs):
-            # We need to pass `output_attentions=True` to get the scores
-            original_output_attentions = kwargs.get("output_attentions", False)
-            kwargs["output_attentions"] = True
-            # The original forward call
-            outputs = original_attention_forward(*args, **kwargs)
-            # `outputs` is a tuple: (attn_output, attn_weights, past_key_value)
-            attn_output, attn_weights, past_key_value = outputs
-
-            if sar_instance.is_active and self.training is False:
-                # During inference, run SAR
-                input_ids = kwargs.get("input_ids", None)
-                # pre_softmax_scores are not always returned. We recalculate them if needed.
-                # This is a simplification; a more robust way would be to patch the score calculation itself.
-                query_states = kwargs.get("hidden_states")  # Assuming hidden_states are passed
-                # This part is highly model-dependent, so we will operate on the returned attention_probs
-                # and assume pre_softmax_scores are similar in distribution for variance calculation.
-                # For simplicity, we use attention_probs as a proxy for pre_softmax_scores for variance.
-                head_weights = sar_instance.run(
-                    pre_softmax_scores=attn_weights,  # Using probs as a proxy
-                    attention_probs=attn_weights,
-                    input_ids=input_ids,
-                    vision_encoder_hidden_states=getattr(model, "_sar_vision_hidden_states", None),
-                )
-
-                if head_weights is not None:
-                    # Reshape attn_output to be per-head before projection
-                    bsz, q_len, _ = query_states.size()
-                    head_dim = attn_output.size(-1) // self.num_heads
-
-                    # Shape (bsz, q_len, num_heads, head_dim) -> (bsz, num_heads, q_len, head_dim)
-                    attn_output_heads = attn_output.view(bsz, q_len, self.num_heads, head_dim).transpose(1, 2)
-                    reweighted_heads = sar_instance.apply_reweighting(attn_output_heads, head_weights)
-                    attn_output = reweighted_heads.transpose(1, 2).reshape(bsz, q_len, self.hidden_size)
-
-            # Restore original `output_attentions` behavior for the final return value
-            if not original_output_attentions:
-                return attn_output, None, past_key_value
-            else:
-                return attn_output, attn_weights, past_key_value
-
-        attention_module.forward = MethodType(sar_forward, attention_module)
-
-
-
-
+        # Use factory function to properly capture sar_instance
+        attention_module.forward = MethodType(
+            make_sar_forward(sar_instance, original_attention_forward),
+            attention_module
+        )
 
 
 
@@ -258,7 +387,7 @@ def patch_model(
     model: "PreTrainedModel",
     tokenizer: "PreTrainedTokenizer",
     model_args: "ModelArguments",
-finetuning_args: "FinetuningArguments", #  Add
+    finetuning_args: "FinetuningArguments",
     is_trainable: bool,
     add_valuehead: bool,
 ) -> None:
@@ -292,9 +421,6 @@ finetuning_args: "FinetuningArguments", #  Add
     if not model_args.use_unsloth:
         print_attn_implementation(model.config)
 
-
-
-#
     if finetuning_args.use_sar:
         patch_model_for_sar(model, finetuning_args)
 
