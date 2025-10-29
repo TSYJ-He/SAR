@@ -178,7 +178,7 @@ def load_model(
             model = convert_pretrained_model_to_mod(model, config, model_args)
 
     if not lazy_load:
-        patch_model(model, tokenizer, model_args, is_trainable, add_valuehead)
+        patch_model(model, tokenizer, model_args, finetuning_args, is_trainable, add_valuehead)
         register_autoclass(config, model, tokenizer)
 
     model = init_adapter(config, model, model_args, finetuning_args, is_trainable)

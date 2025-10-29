@@ -50,60 +50,64 @@ class EvaluationArguments:
         default=None,
         metadata={"help": "Path to save the evaluation results."},
     )
-# --- SAR
-do_sfs_fi_eval: bool = field(
-    default=False,
-    metadata={"help": "Whether to run Semantic Focus Score (SFS) and Focus Instability (FI) evaluation."},
-)
-gd_config_path: Optional[str] = field(
-    default=None,
-    metadata={"help": "Path to the Grounding DINO model config file."},
-)
-gd_checkpoint_path: Optional[str] = field(
-    default=None,
-    metadata={"help": "Path to the Grounding DINO model checkpoint file."},
-)
-sam_checkpoint_path: Optional[str] = field(
-    default=None,
-    metadata={"help": "Path to the Segment Anything Model (SAM) checkpoint file."},
-)
-sam_model_type: str = field(
-    default="vit_h",
-    metadata={"help": "The type of SAM model to load (e.g., 'vit_h', 'vit_l')."},
-)
-do_layerwise_probe: bool = field(
-    default=False,
-    metadata={"help": "Whether to run layer-wise performance probing analysis."},
-)
-layerwise_probe_task: str = field(
-    default="grounding",
-    metadata={"help": "The task for layer-wise probing (currently supports 'grounding')."},
-)
-probe_lr: float = field(
-    default=1e-3,
-    metadata={"help": "Learning rate for training the linear probe."},
-)
-probe_epochs: int = field(
-    default=5,
-    metadata={"help": "Number of epochs to train each probe."},
-)
-probe_batch_size: int = field(
-    default=32,
-    metadata={"help": "Batch size for probe training."},
-)
-
-
-
-
-
-
-
-
-    download_mode: DownloadMode = field(
-        default=DownloadMode.REUSE_DATASET_IF_EXISTS,
-        metadata={"help": "Download mode used for the evaluation datasets."},
+    # --- SAR
+    do_sfs_fi_eval: bool = field(
+        default=False,
+        metadata={"help": "Whether to run Semantic Focus Score (SFS) and Focus Instability (FI) evaluation."},
+    )
+    gd_config_path: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to the Grounding DINO model config file."},
+    )
+    gd_checkpoint_path: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to the Grounding DINO model checkpoint file."},
+    )
+    sam_checkpoint_path: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to the Segment Anything Model (SAM) checkpoint file."},
+    )
+    sam_model_type: str = field(
+        default="vit_h",
+        metadata={"help": "The type of SAM model to load (e.g., 'vit_h', 'vit_l')."},
+    )
+    do_layerwise_probe: bool = field(
+        default=False,
+        metadata={"help": "Whether to run layer-wise performance probing analysis."},
+    )
+    layerwise_probe_task: str = field(
+        default="grounding",
+        metadata={"help": "The task for layer-wise probing (currently supports 'grounding')."},
+    )
+    probe_lr: float = field(
+        default=1e-3,
+        metadata={"help": "Learning rate for training the linear probe."},
+    )
+    probe_epochs: int = field(
+        default=5,
+        metadata={"help": "Number of epochs to train each probe."},
+    )
+    probe_batch_size: int = field(
+        default=32,
+        metadata={"help": "Batch size for probe training."},
+    )
+    output_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to save the output results."},
     )
 
-    def __post_init__(self):
-        if self.save_dir is not None and os.path.exists(self.save_dir):
-            raise ValueError("`save_dir` already exists, use another one.")
+
+
+
+
+
+
+
+    # download_mode: DownloadMode = field(
+    #     default=DownloadMode.REUSE_DATASET_IF_EXISTS,
+    #     metadata={"help": "Download mode used for the evaluation datasets."},
+    # )
+
+    # def __post_init__(self):
+    #     if self.save_dir is not None and os.path.exists(self.save_dir):
+    #         raise ValueError("`save_dir` already exists, use another one.")

@@ -541,8 +541,8 @@ class FinetuningArguments(
         metadata={"help": "Whether or not to compute effective tokens per second."},
     )
 
-    def __init__(self):
-        self.visual_contrastive_loss_weight = None
+    # def __init__(self):
+    #     self.visual_contrastive_loss_weight = None
 
     def __post_init__(self):
         def split_arg(arg):

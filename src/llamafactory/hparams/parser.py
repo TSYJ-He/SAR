@@ -50,8 +50,8 @@ _TRAIN_ARGS = [ModelArguments, DataArguments, TrainingArguments, FinetuningArgum
 _TRAIN_CLS = tuple[ModelArguments, DataArguments, TrainingArguments, FinetuningArguments, GeneratingArguments]
 _INFER_ARGS = [ModelArguments, DataArguments, FinetuningArguments, GeneratingArguments]
 _INFER_CLS = tuple[ModelArguments, DataArguments, FinetuningArguments, GeneratingArguments]
-_EVAL_ARGS = [ModelArguments, DataArguments, EvaluationArguments, FinetuningArguments]
-_EVAL_CLS = tuple[ModelArguments, DataArguments, EvaluationArguments, FinetuningArguments]
+_EVAL_ARGS = [ModelArguments, DataArguments, EvaluationArguments, FinetuningArguments, GeneratingArguments]
+_EVAL_CLS = tuple[ModelArguments, DataArguments, EvaluationArguments, FinetuningArguments, GeneratingArguments]
 
 
 def read_args(args: Optional[Union[dict[str, Any], list[str]]] = None) -> Union[dict[str, Any], list[str]]:
@@ -458,7 +458,7 @@ def get_infer_args(args: Optional[Union[dict[str, Any], list[str]]] = None) -> _
 
 
 def get_eval_args(args: Optional[Union[dict[str, Any], list[str]]] = None) -> _EVAL_CLS:
-    model_args, data_args, eval_args, finetuning_args = _parse_eval_args(args)
+    model_args, data_args, eval_args, finetuning_args, generating_args = _parse_eval_args(args)
 
     # Setup logging
     _set_transformers_logging()
@@ -475,4 +475,4 @@ def get_eval_args(args: Optional[Union[dict[str, Any], list[str]]] = None) -> _E
 
     transformers.set_seed(eval_args.seed)
 
-    return model_args, data_args, eval_args, finetuning_args
+    return model_args, data_args, eval_args, finetuning_args, generating_args
