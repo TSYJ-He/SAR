@@ -537,8 +537,14 @@ def patch_model_for_sar(model: "PreTrainedModel", finetuning_args: "FinetuningAr
     original_generate = model.generate
 
     def generate_with_sar_context(self, *args, **kwargs):
-        input_ids = kwargs.get("inputs", None)
+        input_ids = kwargs.get("input_ids", None)
+        
         if input_ids is None:
+            if len(args) > 0:
+                if isinstance(args[0], torch.Tensor):
+                    input_ids = args[0]
+                elif isinstance(args[0], dict):
+                    input_ids = args[0].get("input_ids", None)
             input_ids = args[0] if len(args) > 0 and isinstance(args[0], torch.Tensor) else None
 
         if isinstance(input_ids, dict):
